@@ -1,0 +1,7 @@
+# Conversion output and virtual environments: archives are published as release assets, never committed.
+build/
+*.aar
+*.mlpackage/
+*.mlmodelc/
+*.dtmodel
+.DS_Store

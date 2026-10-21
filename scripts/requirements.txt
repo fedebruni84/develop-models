@@ -1,0 +1,7 @@
+# Pinned versions for scripts/convert-realplksr.py
+# python3 -m venv build/sr-venv && build/sr-venv/bin/pip install -r scripts/requirements.txt
+coremltools==9.0
+numpy==2.5.4
+onnx==1.23.2
+onnx2torch==1.5.15
+torch==2.14.1
