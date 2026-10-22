@@ -17,6 +17,7 @@ The model files themselves are **release assets**, never committed to git.
 | Model | Task | Release | Archive | Size | Licence |
 |---|---|---|---|---|---|
 | [RawNIND UtNet2 (Bayer)](models/rawnind-bayer/README.md) | Raw denoising (AI Denoise) | [`rawnind-bayer-coreml-1`](https://github.com/fedebruni84/develop-models/releases/tag/rawnind-bayer-coreml-1) | `RawNIND-bayer-coreml.aar` | 29.7 MB (29741512 bytes) | [GPL-3.0](models/rawnind-bayer/LICENSE) |
+| [RawNIND UtNet2 (linear)](models/rawnind-linear/README.md) | Denoising of X-Trans, ProRAW, linear DNG, JPEG/HEIC (AI Denoise) | [`rawnind-linear-coreml-1`](https://github.com/fedebruni84/develop-models/releases/tag/rawnind-linear-coreml-1) | `RawNIND-linear-coreml.aar` | 29.7 MB (29745105 bytes) | [GPL-3.0](models/rawnind-linear/LICENSE) |
 | [RealPLKSR 2×](models/realplksr-x2/README.md) | Super-resolution, 2× per side | [`realplksr-x2-coreml-1`](https://github.com/fedebruni84/develop-models/releases/tag/realplksr-x2-coreml-1) | `RealPLKSR-x2-coreml.aar` | 13.8 MB (13802843 bytes) | [MIT](models/realplksr-x2/LICENSE) |
 | [AI Look (3 models)](models/ai-look/README.md) | Automatic look: a 3D LUT predicted for each photo | [`ai-look-coreml-1`](https://github.com/fedebruni84/develop-models/releases/tag/ai-look-coreml-1) | `AILook-Zeng-FiveK-coreml.aar`, `AILook-AdaInt-FiveK-coreml.aar`, `AILook-AdaInt-PPR10K-coreml.aar` | 2.2 MB, 2.3 MB, 45.2 MB | [Apache-2.0](models/ai-look/LICENSE), research-only training data |
 
@@ -24,6 +25,7 @@ SHA-256 of each archive:
 
 ```
 ec920fccf4d19acad84723026a8d5e1076c256f52ffe944e5aa0888ad84c1296  RawNIND-bayer-coreml.aar
+49e452421f0c66e2d4395cca22ef7fa0d74ffa6b7fb60cebf104267e87ede84c  RawNIND-linear-coreml.aar
 2235ac0145c4a0c085eec9e29619ca111da3ecb01ef16c26c132bb02f9b3e39d  RealPLKSR-x2-coreml.aar
 4f36c3840f98333f28c143716cb51e3df89036c1e53ac00ad64c6d7ce2c2ca39  AILook-Zeng-FiveK-coreml.aar
 d95be9de5d1292eb2d754885f148536cba1b6a7d77cfc7b19e9cf9319872cfa4  AILook-AdaInt-FiveK-coreml.aar
@@ -74,6 +76,7 @@ python3 -m venv build/sr-venv
 build/sr-venv/bin/pip install -r scripts/requirements.txt
 build/sr-venv/bin/python scripts/convert-realplksr.py
 build/sr-venv/bin/python scripts/convert-rawnind.py
+build/sr-venv/bin/python scripts/convert-rawnind.py --network linear
 build/sr-venv/bin/python scripts/convert-ai-look.py
 ```
 

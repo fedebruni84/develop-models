@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Build the AI Denoise model Develop downloads (roadmap 7.3, build 18): RawNIND UtNet2 for Bayer sensors, Core ML, FP32.
+"""Build the AI Denoise models Develop downloads: RawNIND UtNet2 in Core ML, FP32. `--network bayer` (default, roadmap
+7.3, build 18) for Bayer sensors; `--network linear` (roadmap 7.11) for other raws (X-Trans, ProRAW, linear DNG) and
+JPEG/HEIC, on linear Rec.2020 RGB at the same size (input and output [1, 3, 512, 512]).
 
 Source: darktable-ai `rawdenoise-nind.dtmodel` (release-5.6.0), the same file LightCraft fetches, pinned by SHA-256.
 Its `model_bayer.onnx` (GPL-3.0, Benoit Brummer, UCLouvain) is converted to PyTorch (opset 17, onnx2torch) and then to a
@@ -16,7 +18,13 @@ asset of fedebruni84/develop-models.
 
     python3 -m venv build/sr-venv && build/sr-venv/bin/pip install -r scripts/requirements.txt
     build/sr-venv/bin/python scripts/convert-rawnind.py
+    build/sr-venv/bin/python scripts/convert-rawnind.py --network linear
+
+The linear network's answers come in a scale of its own (about -5e8 for this tile): the bridge brings each tile back
+to its input's mean (`EngineFFI/src/denoise_linear.rs`). Its archive is RawNIND-linear-coreml.aar and its constants go
+to Shared/Services/DenoiseLinearCatalog.swift (inside Develop), so the published Bayer archive and its catalog are left as they are.
 """
+import argparse
 import hashlib
 import json
 import shutil
@@ -37,6 +45,9 @@ OUT = ROOT / "build" / "models"
 SOURCE_URL = "https://github.com/darktable-org/darktable-ai/releases/download/release-5.6.0/rawdenoise-nind.dtmodel"
 SOURCE_SHA256 = "d71b5f1e727c85a359e6f74dca9e2016c9d8fc3e2f7ac3e9b347d80ceca969af"
 ONNX_MEMBER = "rawdenoise-nind/model_bayer.onnx"
+LINEAR_MEMBER = "rawdenoise-nind/model_linear.onnx"
+LINEAR_OVERLAP = 32
+LINEAR_NAME = "RawNIND-linear"
 ONNX_SHA256 = "da27509dab6a2915da67e988acd86cf71f9d5bbc8d1aa0ed32933578a887b901"
 ONNX_SIZE = 31_056_425
 TILE = 512
@@ -163,5 +174,111 @@ def main() -> None:
                       "maxErrorAgainstSource": error, "selfTestPeak": self_test["peak"]}))
 
 
+def linear_self_test_input() -> np.ndarray:
+    """The procedural linear Rec.2020 tile the app rebuilds to test the installed linear model (same formula in Swift)."""
+    y, x = np.mgrid[0:TILE, 0:TILE].astype(np.float32)
+    planes = [0.2 + 0.15 * np.sin(x * 0.05 + c) * np.cos(y * 0.03 + 2 * c) for c in range(3)]
+    return np.stack(planes)[None].astype(np.float32)
+
+
+def linear_sample_points():
+    return [(c, (k * 131) % TILE, (k * 197 + 61) % TILE) for k in range(16) for c in range(3)]
+
+
+def write_linear_catalog(sha: str, size: int, fingerprint: str, self_test: dict) -> None:
+    services = ROOT / "Shared" / "Services"
+    if not services.is_dir():
+        return
+    samples = ",\n".join(f"        [{c}, {y}, {x}, {v!r}]" for c, y, x, v in self_test["samples"])
+    mean = ", ".join(repr(m) for m in self_test["mean"])
+    (services / "DenoiseLinearCatalog.swift").write_text(f"""//
+//  DenoiseLinearCatalog.swift
+//  Develop
+//
+//  Scritto da scripts/convert-rawnind.py --network linear: hash e dimensione dell'archivio pubblicato della rete
+//  lineare di AI Denoise (roadmap 7.11), statistiche della prova.
+
+nonisolated enum DenoiseLinearCatalog {{
+    static let sha256 = "{sha}"
+    static let size: Int64 = {size}
+    /// L'impronta dei pesi: dà il nome alle foto pulite fatte con la rete lineare.
+    static let fingerprint = "{fingerprint}"
+    static let selfTestPeak: Double = {self_test["peak"]!r}
+    static let selfTestMean: [Double] = [{mean}]
+    static let selfTestSamples: [[Double]] = [
+{samples},
+    ]
+}}
+""")
+
+
+def main_linear() -> None:
+    OUT.mkdir(parents=True, exist_ok=True)
+    source = OUT / "rawdenoise-nind.dtmodel"
+    fetch(SOURCE_URL, source, SOURCE_SHA256)
+    with zipfile.ZipFile(source) as z:
+        onnx_bytes = z.read(LINEAR_MEMBER)
+    onnx_sha = hashlib.sha256(onnx_bytes).hexdigest()
+    fingerprint = f"rawnind-linear@{onnx_sha}:{len(onnx_bytes)}"
+    licence = OUT / "gpl-3.0.txt"
+    fetch(GPL_URL, licence, GPL_SHA256)
+
+    model = convert(version_converter.convert_version(onnx.load_from_string(onnx_bytes), 17)).eval()
+    probe = torch.rand(1, 3, TILE, TILE, generator=torch.Generator().manual_seed(7)) * 0.3
+    with torch.no_grad():
+        traced = torch.jit.trace(model, probe)
+        reference = model(probe).numpy()
+    ml = ct.convert(traced, inputs=[ct.TensorType(name="input", shape=probe.shape, dtype=np.float32)],
+                    outputs=[ct.TensorType(name="output", dtype=np.float32)], convert_to="mlprogram",
+                    compute_precision=ct.precision.FLOAT32, minimum_deployment_target=ct.target.iOS18)
+    ml.short_description = "RawNIND UtNet2 linear Rec.2020 denoiser (GPL-3.0, Benoit Brummer, UCLouvain), from darktable-ai"
+
+    package_dir = OUT / LINEAR_NAME
+    shutil.rmtree(package_dir, ignore_errors=True)
+    package_dir.mkdir()
+    package = package_dir / f"{LINEAR_NAME}.mlpackage"
+    ml.save(str(package))
+
+    gpu = ct.models.MLModel(str(package), compute_units=ct.ComputeUnit.CPU_AND_GPU)
+    converted = gpu.predict({"input": probe.numpy()})["output"]
+    error = float(np.abs(converted - reference).max() / np.abs(reference).max())
+    assert error < TOLERANCE, f"Core ML differs from the source model by {error} of its peak"
+
+    tested = gpu.predict({"input": linear_self_test_input()})["output"][0]
+    self_test = {
+        "formula": "0.2 + 0.15 * sin(x * 0.05 + c) * cos(y * 0.03 + 2 * c), 3 x 512 x 512, float32",
+        "peak": float(np.abs(tested).max()),
+        "mean": [float(tested[c].mean()) for c in range(3)],
+        "samples": [[c, y, x, float(tested[c, y, x])] for c, y, x in linear_sample_points()],
+        "tolerance": TOLERANCE,
+    }
+    manifest = {
+        "id": "rawnind-linear", "name": "RawNIND UtNet2 (linear Rec.2020)", "version": "1",
+        "input": "linear Rec.2020 RGB as three planes, float32, [1, 3, 512, 512]",
+        "output": "linear Rec.2020 RGB, float32, [1, 3, 512, 512], in the model's own scale (bring each tile back to its input's mean)",
+        "tiling": {"tile": TILE, "overlap": LINEAR_OVERLAP, "gain": "match the input tile's mean"},
+        "computeUnits": "cpuAndGPU in full precision",
+        "licence": {"name": "GPL-3.0", "url": "https://www.gnu.org/licenses/gpl-3.0.html"},
+        "source": {"model": "https://github.com/trougnouf/rawnind_jddc", "paper": "https://arxiv.org/abs/2501.08924",
+                   "archive": SOURCE_URL, "archiveSha256": SOURCE_SHA256, "onnx": LINEAR_MEMBER, "onnxSha256": onnx_sha},
+        "fingerprint": fingerprint,
+        "maxErrorAgainstSource": error, "selfTest": self_test,
+    }
+    (package_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    shutil.copy(licence, package_dir / "LICENSE")
+
+    archive = OUT / f"{LINEAR_NAME}-coreml.aar"
+    archive.unlink(missing_ok=True)
+    subprocess.run(["aa", "archive", "-d", str(package_dir), "-o", str(archive), "-a", "lzfse"], check=True)
+    write_linear_catalog(sha256(archive), archive.stat().st_size, fingerprint, self_test)
+    print(json.dumps({"archive": str(archive), "sha256": sha256(archive), "size": archive.stat().st_size,
+                      "maxErrorAgainstSource": error, "selfTestPeak": self_test["peak"], "fingerprint": fingerprint}))
+
+
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("--network", choices=["bayer", "linear"], default="bayer")
+    if parser.parse_args().network == "linear":
+        main_linear()
+    else:
+        main()

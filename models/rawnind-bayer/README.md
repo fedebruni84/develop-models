@@ -64,5 +64,5 @@ chosen Download. If you pass the model file on, the GPL applies to that copy.
 ## Limitations
 
 - Bayer sensors only. Fujifilm X-Trans, Foveon and already demosaiced files (Apple ProRAW, linear DNGs) are not supported.
-  darktable-ai's archive also carries a linear-RGB variant for those; it is not part of this release.
+  Those take the linear variant of the same network: [RawNIND UtNet2 (linear)](../rawnind-linear/README.md).
 - Like any learned denoiser, at very high ISO it can smooth fine texture or render it in a way that was not in the scene.
