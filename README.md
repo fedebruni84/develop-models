@@ -16,12 +16,14 @@ The model files themselves are **release assets**, never committed to git.
 
 | Model | Task | Release | Archive | Size | Licence |
 |---|---|---|---|---|---|
+| [RawNIND UtNet2 (Bayer)](models/rawnind-bayer/README.md) | Raw denoising (AI Denoise) | [`rawnind-bayer-coreml-1`](https://github.com/fedebruni84/develop-models/releases/tag/rawnind-bayer-coreml-1) | `RawNIND-bayer-coreml.aar` | 29.7 MB (29741512 bytes) | [GPL-3.0](models/rawnind-bayer/LICENSE) |
 | [RealPLKSR 2×](models/realplksr-x2/README.md) | Super-resolution, 2× per side | [`realplksr-x2-coreml-1`](https://github.com/fedebruni84/develop-models/releases/tag/realplksr-x2-coreml-1) | `RealPLKSR-x2-coreml.aar` | 13.8 MB (13802843 bytes) | [MIT](models/realplksr-x2/LICENSE) |
 
-SHA-256 of `RealPLKSR-x2-coreml.aar`:
+SHA-256 of each archive:
 
 ```
-2235ac0145c4a0c085eec9e29619ca111da3ecb01ef16c26c132bb02f9b3e39d
+ec920fccf4d19acad84723026a8d5e1076c256f52ffe944e5aa0888ad84c1296  RawNIND-bayer-coreml.aar
+2235ac0145c4a0c085eec9e29619ca111da3ecb01ef16c26c132bb02f9b3e39d  RealPLKSR-x2-coreml.aar
 ```
 
 ## How Develop uses a model
@@ -66,10 +68,11 @@ reference pass at 1024 × 1024 on the CPU takes a while.
 python3 -m venv build/sr-venv
 build/sr-venv/bin/pip install -r scripts/requirements.txt
 build/sr-venv/bin/python scripts/convert-realplksr.py
+build/sr-venv/bin/python scripts/convert-rawnind.py
 ```
 
-The script writes `build/models/RealPLKSR-x2-coreml.aar` and prints its SHA-256, its size, the maximum error
-against the source model and the self-test statistics. A rebuild is expected to give the same weights and
+Each script writes its archive into `build/models/` and prints its SHA-256, its size, the maximum error against the
+source model and the self-test statistics. A rebuild is expected to give the same weights and
 results with the pinned versions. The archive's bytes may still differ from the published one, because the
 package metadata includes timestamps. Check a rebuild against `manifest.json`, not against the hash.
 
@@ -78,6 +81,16 @@ package metadata includes timestamps. Check a rebuild against `manifest.json`, n
 - **Scripts and documentation in this repository:** [MIT](LICENSE).
 - **Each model:** keeps its own licence, in `models/<model>/LICENSE`. That file is also copied into every
   archive.
+
+**RawNIND UtNet2**
+- Author: Benoit Brummer, UCLouvain.
+- Code and training: <https://github.com/trougnouf/rawnind_jddc>
+- Paper: [arXiv:2501.08924](https://arxiv.org/abs/2501.08924)
+- Licence: **GPL-3.0**. The weights are redistributed converted to Core ML under the same licence, with its full text.
+  The preferred form for modifying them is the upstream network and training code.
+- Training data: RawNIND, CC BY 4.0 and CC0.
+- The ONNX export these archives are converted from was published by
+  [darktable-ai](https://github.com/darktable-org/darktable-ai) (release `release-5.6.0`).
 
 **RealPLKSR**
 - Authors: Dongheon Lee et al., Machine Intelligence Laboratory, University of Seoul.

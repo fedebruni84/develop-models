@@ -1,4 +1,4 @@
-# Pinned versions for scripts/convert-realplksr.py
+# Pinned versions for scripts/convert-realplksr.py and scripts/convert-rawnind.py
 # python3 -m venv build/sr-venv && build/sr-venv/bin/pip install -r scripts/requirements.txt
 coremltools==9.0
 numpy==2.5.4
